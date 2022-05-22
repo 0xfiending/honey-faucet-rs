@@ -1,0 +1,18 @@
+[package]
+name = "ct_nlp"
+version = "0.1.0"
+edition = "2021"
+authors = ["bkeeper.eth <bkeeper_eth@protonmail.com>"]
+
+[dependencies]
+serde_json = "1.0.81"
+serde = { version = "1.0", features = ["derive"] } 
+tokio = { version = "1.0", features = ["full"] }
+log = "0.4.14"
+reqwest = "0.9.24"
+polars = "0.20.0"
+chrono = "0.4.19"
+
+[lib]
+name = "ct_nlp"
+path = "ct_nlp.rs"

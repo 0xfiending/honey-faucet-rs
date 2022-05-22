@@ -1,0 +1,8 @@
+[workspace]
+
+members = [
+    "conf",
+    "ct_nlp",
+    "bin",
+    "diesel",
+]

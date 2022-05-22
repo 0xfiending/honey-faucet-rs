@@ -1,0 +1,8 @@
+CREATE TABLE job (
+    job_id SERIAL PRIMARY KEY,
+    job_name VARCHAR(256) NOT NULL UNIQUE,
+    flow_id INTEGER REFERENCES flow (flow_id) NOT NULL,
+    status VARCHAR(1) DEFAULT 'N' NOT NULL,
+    created_dt TIMESTAMP WITHOUT TIME ZONE NOT NULL,
+    updated_dt TIMESTAMP WITHOUT TIME ZONE
+);

@@ -1,0 +1,16 @@
+[package]
+name = "conf"
+version = "1.1.0"
+edition = "2021"
+authors = ["bkeeper.eth <bkeeper_eth@protonmail.com>"]
+
+[dependencies]
+serde_yaml = "0.8.23"
+serde_json = "1.0"
+clap = "3.0.0"
+log4rs = "1.0"
+log = "0.4.14"
+
+[lib]
+name = "conf"
+path = "conf.rs"
