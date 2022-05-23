@@ -12,3 +12,13 @@ The modular design allows for scalable, custom ETL pipeline creation by chaining
 </p>
 
 ### CLI
+<p>The CLI tool is designed to query specific subjects of interest prior to setting up a pipeline. </br>
+The current set of supported actions hit the twitter v2 api endpoint. </br>
+</p>
+
+
+<p align="center" width="15%" size="50%">
+   <img src="work/.png">  
+</p>
+
+
