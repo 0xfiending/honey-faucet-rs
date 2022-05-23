@@ -1,7 +1,7 @@
 # data-extractor-rs
 
 ### DESIGN
-<p>Event-Driven Data Warehouse Creation for NFT analysis, including NLP, on-chain, and market analysis. </br></br>
+<p>Event-Driven Data Warehouse Creation for NLP and on-chain analytics, with a focus on NFT analysis. </br></br>
 </p>
 
 
