@@ -18,16 +18,46 @@ struct Tweet {
     user: String,
 }
 
-pub async fn tweet_lookup(bearer_token: &str, tweet_id: &str, author: &str) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn tweet_lookup(bearer_token: &str, tweet_id: &str) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
     info!("tweet_lookup|starting");
 
-    if bearer_token == "" { panic!("error: bearer_token is not valid"); }
+    if bearer_token == "" { 
+        return Err(format!("tweet_lookup|ERR: bearer token is not valid, bearer_token={}", bearer_token).into());
+    }
+    
+    if tweet_id == "" { 
+        return Err(format!("tweet_lookup|ERR: tweet_id is not valid, tweet_id={}", tweet_id).into());
+    }
 
-    let url = String::from("https://api.twitter.com/2/tweets");
-    info!("tweet_lookup|url={}", url);
+    let url = format!("https://api.twitter.com/2/tweets/{}", tweet_id);
+    info!("tweet_lookup|url={:?}", url);
+
+    let tw_client = reqwest::Client::new();
+    let mut response = tw_client.get(&url)
+        .query(&[
+            ("expansions", "author_id"),
+            ("tweet.fields", "author_id,created_at,text"),
+            ("user.fields", "name,username"),
+        ])
+        .header("Authorization", format!("Bearer {}", bearer_token))
+        .send()?;
+
+    match response.status() {
+        StatusCode::OK => info!("tweet_lookup|query success|parse starting..."),
+        s => {
+            return Err(format!("tweet_lookup|status={}", s).into())
+        },
+    }
+
+    let tmp: serde_json::Value = match response.text() {
+        Ok(x) => serde_json::from_str(&x)?,
+        Err(e) => {
+            return Err(format!("tweet_lookup|ERR: unable to parse response object,  err={}", e).into())
+        },
+    };
 
     info!("tweet_lookup|completed");
-    Ok(())
+    Ok(tmp)
 }
 
 pub async fn get_recent_tweets(bearer_token: &str, topic: &str, count: &str) -> Result<DataFrame, Box<dyn std::error::Error>> {
@@ -106,12 +136,18 @@ pub async fn get_recent_tweets(bearer_token: &str, topic: &str, count: &str) -> 
     Ok(df)
 }
 
-pub async fn get_tweet_counts(bearer_token: &str, topic: &str) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn get_tweet_counts(bearer_token: &str, topic: &str) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
     info!("get_tweet_counts|starting");
     info!("get_tweet_counts|topic={}", topic);
 
-    if bearer_token == "" { panic!("error: bearer_token is not valid");  }
-        
+    if bearer_token == "" { 
+        return Err(format!("get_tweet_counts|ERR: bearer_token is not valid, bearer_token={}", bearer_token).into()); 
+    }
+
+    if topic == "" {
+        return Err(format!("get_tweet_counts|ERR: topic is not valid, topic={}", topic).into());
+    }
+
     let url = String::from("https://api.twitter.com/2/tweets/counts/recent");
 
     let tw_client = reqwest::Client::new();
@@ -125,18 +161,19 @@ pub async fn get_tweet_counts(bearer_token: &str, topic: &str) -> Result<(), Box
 
     match response.status() {
         StatusCode::OK => info!("get_tweet_counts|query success|parse starting..."),
-        s => println!("{}", s),
+        s => return Err(format!("get_tweet_counts|status={}", s).into()),
     }
 
     let tmp: serde_json::Value = match response.text() {
         Ok(x) => serde_json::from_str(&x)?,
-        Err(e) => panic!("{:?}", e),
+        Err(_) => return Err("get_tweet_counts|ERR: unable to parse response text".into()),
     };
 
+    /*
     let meta = &tmp["meta"]; 
     let data = match tmp["data"].as_array() {
         Some(x) => x,
-        _ => panic!("error: unable to parse result"),
+        _ => return Err("get_tweet_counts|ERR: unable to parse data object".into()),
     };
 
     println!();
@@ -149,6 +186,7 @@ pub async fn get_tweet_counts(bearer_token: &str, topic: &str) -> Result<(), Box
     }
     println!();
 
+    */
     info!("get_tweet_counts|completed");
-    Ok(())
+    Ok(tmp)
 }

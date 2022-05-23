@@ -1,4 +1,4 @@
-use ct_nlp::{get_recent_tweets, get_tweet_counts};
+use ct_nlp::{get_recent_tweets, get_tweet_counts, tweet_lookup};
 use conf::{parse_args, get_config, init_logger};
 
 use chrono::Utc;
@@ -57,16 +57,72 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let result = get_tweet_counts(
                 config.get("bearer_token").expect("ERR: bearer_token is invalid"),
                 cli_args.value_of("topic").expect("ERR: cli [topic] is invalid"),
-            ).await?;    
+            ).await;    
 
-            match result { 
-                () => info!("main|counts|completed"),
-                _ => info!("main|counts|failed"),
+            match result {
+                Ok(count) => {
+                    let data = match count["data"].as_array() {
+                        Some(x) => x,
+                        _ => return Err("get_tweet_counts|ERR: unable to parse data object".into()),
+                    };
+
+                    println!();
+                    for row in data {
+                        let start_dt = row["start"].to_string();
+                        let count = match row["tweet_count"].as_u64() {
+                            Some(x) => { println!("{}|count={}", &start_dt[1..start_dt.len()-1], x); },
+                            None => { continue; },
+                        };
+                    }
+                    println!();
+                },
+                Err(e) => { info!("main|ERR: unable to parse counts object|e={:?}", e); },
             }
         },
         "tweet_lookup" => {
-            println!("tweet_lookup");
+            let result = tweet_lookup(
+                config.get("bearer_token").expect("ERR: bearer_token is invalid"),
+                cli_args.value_of("tweet_id").expect("ERR: cli [tweet_id] is invalid"),
+            ).await;
 
+            match result {
+                Ok(tweet) => { 
+                    let data = match tweet["data"].as_object() {
+                        Some(x) => x,
+                        None => panic!("main|ERR: unable to parse data object"),
+                    };
+
+                    let users = match tweet["includes"].as_object() {
+                        Some(includes) => match includes["users"].as_array() {
+                            Some(users) => users,
+                            None => panic!("main|ERR: unable to parse users object"),
+                        },
+                        None => panic!("main|ERR: unable to parse includes object"),
+                    };
+
+                    let mut author_id = data["author_id"].to_string();
+                    let mut created_at = data["created_at"].to_string();
+                    let mut text = data["text"].to_string();
+                    let mut tweet_id = data["id"].to_string();
+                    let mut author_name = users[0]["name"].to_string();
+                    let mut author_username = users[0]["username"].to_string();
+
+                    author_id = author_id[1..author_id.len()-1].to_string();
+                    created_at = created_at[1..created_at.len()-1].to_string();
+                    text = text[1..text.len()-1].to_string();
+                    tweet_id = tweet_id[1..tweet_id.len()-1].to_string();
+                    author_name = author_name[1..author_name.len()-1].to_string();
+                    author_username = author_username[1..author_username.len()-1].to_string();
+
+                    println!("\nAuthor: {} // {} ({})\nCreated Dt: {}\nText: {}\n", 
+                            author_name, 
+                            author_username, 
+                            author_id, 
+                            created_at,
+                            text);
+                },
+                Err(e) => { info!("main|ERR: unable to parse tweet object|e={:?}", e); },
+            }
         },
         _ => {
             usage();
