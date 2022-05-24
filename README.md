@@ -11,14 +11,28 @@ The modular design allows for scalable, custom ETL pipeline creation by chaining
    <img src="work/db_design_flows.png">  
 </p>
 
-### CLI
+## CLI
 <p>The CLI tool is designed to query specific subjects of interest prior to setting up a pipeline. </br>
 The current set of supported actions hit the twitter v2 api endpoint. </br>
 </p>
 
-
+### Recent Command
 <p align="center" width="15%" size="50%">
-   <img src="work/.png">  
+   <img src="work/cli_recent_test_run.png">  
 </p>
 
+### Counts Command
+<p align="center" width="15%" size="50%">
+   <img src="work/cli_counts_test_run.png">  
+</p>
+
+### Tweet Lookup Command
+<p align="center" width="15%" size="50%">
+   <img src="work/cli_tweet_lookup_test_run.png">  
+</p>
+
+### User Timeline Command
+<p align="center" width="15%" size="50%">
+   <img src="work/cli_user_timeline_test_run.png">  
+</p>
 
