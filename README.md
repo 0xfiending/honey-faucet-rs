@@ -37,10 +37,23 @@ The current set of supported actions hit the twitter v2 api endpoint. </br>
 </p>
 
 ## NLP Strategy
-<p> Current NFT Sentiment Analysis Design: </br>
+<p>Current NFT Sentiment Analysis Design: </br>
+- Collect data for an initial Training and Test Set. </br>
 - Perform standard sentiment analysis on tweet text for a particular topic. </br>
 - R&D to include tweet impressions in analysis (likes + retweets + comments) </br>
 - Aggregate Persons of Interest as separate topics and include them for the analysis. (EX. Do Kwon for topic = "LUNA") </br>
-  - Avoid shitposters, anime pfps, and trolls </br>
+---- Avoid shitposters, anime pfps, and trolls </br>
 - Aggregate Projects of Interest as separate topics and include them for the analysis. (EX: Cyberkongz,Nansen.ai,LooksRare for topic = "NFT") </br>
+- R&D on analysis tuning
+</p>
+
+### NLP PIPELINE DESIGN
+<p>The current design will consist of a 4-step Flow. </br>
+The first step will be called nlp-topic-land. </br>
+This step will pull data down from Twitter and save it in a parquet file format. </br>
+The second step will handle the transformation of the data to remove duplicate tweets. (Not sure if this step is needed)</br>
+The third step will pre-process the text data. </br>
+The fourth step will make classifications on a data set based on various algorithms. (Naive Bayes, SVM, Logistic Regression, LSTM, etc...) </br>
+The idea is to be able to provide sentiment classification (positive / negative) for a particular topic for a particular interval (Past 24HR, Past 7D, Past 30D). </br>
+</br>
 </p>
