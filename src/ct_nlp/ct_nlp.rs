@@ -1,6 +1,4 @@
-use chrono::{NaiveDateTime, Utc};
-use chrono::format::strftime::StrftimeItems;
-use reqwest::{Client, StatusCode};
+use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use log::info;
@@ -18,6 +16,167 @@ struct Tweet {
     user: String,
 }
 
+/*
+/// Utility method to query the users_lookup (v2) endpoint
+pub async fn users_lookup(bearer_token: &str, user_id: &str) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
+    
+}*/
+
+/// Utility method to query the mentions timeline (v2) endpoint
+pub async fn mentions_timeline(bearer_token: &str, user_id: &str) -> Result<DataFrame, Box<dyn std::error::Error>> {
+    info!("mentions_timeline|starting");
+
+    if bearer_token == "" {
+        return Err(format!("mentions_timeline|ERR: bearer token is not valid, bearer_token={}", bearer_token).into());
+    }
+
+    if user_id == "" {
+        return Err(format!("mentions_timeline|ERR: user id is not valid, user_id={}", user_id).into());
+    }
+
+    let url = format!("https://api.twitter.com/2/users/{id}/mentions", id=user_id);
+    info!("mentions_timeline|url={:?}", url);
+
+    let tw_client = reqwest::Client::new();
+    let mut response = tw_client.get(&url)
+        .query(&[
+            ("expansions", "author_id"),
+            ("tweet.fields", "author_id,created_at,text"),
+            ("max_results", "100"),
+        ])
+        .header("Authorization", format!("Bearer {}", bearer_token))
+        .send()?;
+
+    match response.status() {
+        StatusCode::OK => info!("mentions_timeline|query success|parse starting..."),
+        s => return Err(format!("mentions_timeline|status={}", s).into()),
+    }
+
+    let tmp: serde_json::Value = match response.text() {
+        Ok(x) => serde_json::from_str(&x)?,
+        Err(e) => return Err(format!("mentions_timeline|ERR: unable to parse response object, err={}", e).into()),
+    };
+
+    let data = match tmp["data"].as_array() {
+        Some(x) => x,
+        _ => return Err(format!("mentions_timeline|ERR: unable to parse data object").into()),
+    };
+
+    let mut author_vec: Vec<String> = vec![];
+    //let mut username_vec: Vec<String> = vec![];
+    let mut created_vec: Vec<String> = vec![];
+    let mut id_vec: Vec<String> = vec![];
+    let mut text_vec: Vec<String> = vec![];
+
+    for tweet in data {
+        let mut author_id = tweet["author_id"].to_string();
+        let mut created_at = tweet["created_at"].to_string();
+        let mut id = tweet["id"].to_string();
+        let mut text = tweet["text"].to_string();
+
+        if (author_id == "") || (created_at == "") || (id == "") || (text == "") { continue; }
+
+        author_id = author_id[1..author_id.len()-1].to_string();
+        created_at = created_at[1..created_at.len()-1].to_string();
+        id = id[1..id.len()-1].to_string();
+        text = text[1..text.len()-1].to_string();
+
+        author_vec.push(author_id);
+        created_vec.push(created_at);
+        id_vec.push(id);
+        text_vec.push(text);
+    }
+
+    let df = DataFrame::new(vec![
+        Series::new("tweet_id", id_vec),
+        Series::new("author_id", author_vec),
+        Series::new("text", text_vec),
+        Series::new("created_at", created_vec),
+    ])?;
+
+    println!("{:?}", df);
+    info!("mentions_timeline|completed");
+    Ok(df)
+}
+
+/// Utility method to query the user timeline (v2) endpoint
+pub async fn user_timeline(bearer_token: &str, user_id: &str) -> Result<DataFrame, Box<dyn std::error::Error>> {
+    info!("user_timeline|starting");
+
+    if bearer_token == "" {
+        return Err(format!("user_timeline|ERR: bearer token is not valid, bearer_token={}", bearer_token).into());
+    }
+
+    if user_id == "" {
+       return Err(format!("user_timeline|ERR: user id is not valid, user_id={}", user_id).into());
+    }
+
+    let url = format!("https://api.twitter.com/2/users/{id}/tweets", id=user_id);
+    info!("user_timeline|url={:?}", url);
+
+    let tw_client = reqwest::Client::new();
+    let mut response = tw_client.get(&url)
+        .query(&[
+            ("expansions", "author_id"),
+            ("tweet.fields", "author_id,created_at,text"),
+            ("max_results", "100"),
+        ])
+        .header("Authorization", format!("Bearer {}", bearer_token))
+        .send()?;
+
+    match response.status() {
+        StatusCode::OK => info!("user_timeline|query success|parse starting..."),
+        s => return Err(format!("user_timeline|status={}", s).into()),
+    }
+
+    let tmp: serde_json::Value = match response.text() {
+        Ok(x) => serde_json::from_str(&x)?,
+        Err(e) => return Err(format!("user_timeline|ERR: unable to parse response object, err={}", e).into()),
+    };
+
+    let data = match tmp["data"].as_array() {
+        Some(x) => x,
+        _ => return Err(format!("user_timeline|ERR: unable to parse data object").into()),
+    };
+
+    let mut author_vec: Vec<String> = vec![];
+    //let mut username_vec: Vec<String> = vec![];
+    let mut created_vec: Vec<String> = vec![];
+    let mut id_vec: Vec<String> = vec![];
+    let mut text_vec: Vec<String> = vec![];
+
+    for tweet in data {
+        let mut author_id = tweet["author_id"].to_string();
+        let mut created_at = tweet["created_at"].to_string();
+        let mut id = tweet["id"].to_string();
+        let mut text = tweet["text"].to_string();
+
+        if (author_id == "") || (created_at == "") || (id == "") || (text == "") { continue; }
+
+        author_id = author_id[1..author_id.len()-1].to_string();
+        created_at = created_at[1..created_at.len()-1].to_string();
+        id = id[1..id.len()-1].to_string();
+        text = text[1..text.len()-1].to_string();
+
+        author_vec.push(author_id);
+        created_vec.push(created_at);
+        id_vec.push(id);
+        text_vec.push(text);
+    }
+
+    let df = DataFrame::new(vec![
+        Series::new("tweet_id", id_vec),
+        Series::new("author_id", author_vec),
+        Series::new("text", text_vec),
+        Series::new("created_at", created_vec),
+    ])?;
+
+    info!("user_timeline|completed");
+    Ok(df)
+}
+
+/// Utility method to query tweet_lookup (v2) endpoint
+/// The response object is returned if valid
 pub async fn tweet_lookup(bearer_token: &str, tweet_id: &str) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
     info!("tweet_lookup|starting");
 
@@ -44,28 +203,28 @@ pub async fn tweet_lookup(bearer_token: &str, tweet_id: &str) -> Result<serde_js
 
     match response.status() {
         StatusCode::OK => info!("tweet_lookup|query success|parse starting..."),
-        s => {
-            return Err(format!("tweet_lookup|status={}", s).into())
-        },
+        s => return Err(format!("tweet_lookup|status={}", s).into()),
     }
 
-    let tmp: serde_json::Value = match response.text() {
+    let result: serde_json::Value = match response.text() {
         Ok(x) => serde_json::from_str(&x)?,
-        Err(e) => {
-            return Err(format!("tweet_lookup|ERR: unable to parse response object,  err={}", e).into())
-        },
+        Err(e) => return Err(format!("tweet_lookup|ERR: unable to parse response object,  err={}", e).into()),
     };
 
     info!("tweet_lookup|completed");
-    Ok(tmp)
+    Ok(result)
 }
 
+
+/// Utility method to query recents (v2) endpoint
+/// Additional parsing is done to seed a DataFrame
+/// cols: author_id, created_at, tweet_id, text
 pub async fn get_recent_tweets(bearer_token: &str, topic: &str, count: &str) -> Result<DataFrame, Box<dyn std::error::Error>> {
     info!("get_recent_tweets|starting");
     info!("get_recent_tweets|topic: {}", topic);
 
     let mut author_vec: Vec<String> = vec![];
-    let mut username_vec: Vec<String> = vec![];
+    //let mut username_vec: Vec<String> = vec![];
     let mut created_vec: Vec<String> = vec![];
     let mut id_vec: Vec<String> = vec![];
     let mut text_vec: Vec<String> = vec![];
@@ -96,6 +255,7 @@ pub async fn get_recent_tweets(bearer_token: &str, topic: &str, count: &str) -> 
         Err(e) => panic!("{:?}", e),
     };
 
+    /*
     let meta = &tmp["meta"]; 
     let next_token = &tmp["next_token"]; 
     let oldest_id =  &tmp["oldest_id"];
@@ -105,6 +265,7 @@ pub async fn get_recent_tweets(bearer_token: &str, topic: &str, count: &str) -> 
         Some(x) => x,
         _ => panic!("error: unable to parse includes object from response"),
     };
+    */
 
     let data = match tmp["data"].as_array() {
         Some(x) => x,
@@ -112,10 +273,10 @@ pub async fn get_recent_tweets(bearer_token: &str, topic: &str, count: &str) -> 
     };
 
     for tweet in data {
-        let mut author_id = tweet["author_id"].to_string();
-        let mut created_at = tweet["created_at"].to_string();
-        let mut id = tweet["id"].to_string();
-        let mut text = tweet["text"].to_string();
+        let author_id = tweet["author_id"].to_string();
+        let created_at = tweet["created_at"].to_string();
+        let id = tweet["id"].to_string();
+        let text = tweet["text"].to_string();
 
         if (author_id == "") || (created_at == "") || (id == "") || (text == "") { continue; }
 
@@ -125,7 +286,7 @@ pub async fn get_recent_tweets(bearer_token: &str, topic: &str, count: &str) -> 
         text_vec.push(text);
     }
 
-    let mut df = DataFrame::new(vec![
+    let df = DataFrame::new(vec![
         Series::new("tweet_id", id_vec),
         Series::new("author_id", author_vec),
         Series::new("text", text_vec),
@@ -136,6 +297,8 @@ pub async fn get_recent_tweets(bearer_token: &str, topic: &str, count: &str) -> 
     Ok(df)
 }
 
+/// Utility method to query counts (v2) endpoint
+/// The response object is returned if valid
 pub async fn get_tweet_counts(bearer_token: &str, topic: &str) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
     info!("get_tweet_counts|starting");
     info!("get_tweet_counts|topic={}", topic);
@@ -164,29 +327,11 @@ pub async fn get_tweet_counts(bearer_token: &str, topic: &str) -> Result<serde_j
         s => return Err(format!("get_tweet_counts|status={}", s).into()),
     }
 
-    let tmp: serde_json::Value = match response.text() {
+    let result: serde_json::Value = match response.text() {
         Ok(x) => serde_json::from_str(&x)?,
         Err(_) => return Err("get_tweet_counts|ERR: unable to parse response text".into()),
     };
 
-    /*
-    let meta = &tmp["meta"]; 
-    let data = match tmp["data"].as_array() {
-        Some(x) => x,
-        _ => return Err("get_tweet_counts|ERR: unable to parse data object".into()),
-    };
-
-    println!();
-    for row in data {
-        let start_dt = row["start"].to_string();
-        let count = match row["tweet_count"].as_u64() {
-            Some(x) => { println!("{}|count={}", &start_dt[1..start_dt.len()-1], x); },
-            None => { continue; },
-        };
-    }
-    println!();
-
-    */
     info!("get_tweet_counts|completed");
-    Ok(tmp)
+    Ok(result)
 }

@@ -1,4 +1,9 @@
-use ct_nlp::{get_recent_tweets, get_tweet_counts, tweet_lookup};
+use ct_nlp::{
+    mentions_timeline,
+    user_timeline, 
+    get_recent_tweets, 
+    get_tweet_counts, 
+    tweet_lookup};
 use conf::{parse_args, get_config, init_logger};
 
 use chrono::Utc;
@@ -6,7 +11,6 @@ use log::info;
 use clap::ArgMatches;
 use std::collections::BTreeMap;
 use std::result::Result;
-use std::error::Error;
 
 fn usage() {
     println!("Usage: cargo run --bin ct_nlp_cli  -- --topic <topic> --config <config> --action <action>");
@@ -69,7 +73,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     println!();
                     for row in data {
                         let start_dt = row["start"].to_string();
-                        let count = match row["tweet_count"].as_u64() {
+                        match row["tweet_count"].as_u64() {
                             Some(x) => { println!("{}|count={}", &start_dt[1..start_dt.len()-1], x); },
                             None => { continue; },
                         };
@@ -114,14 +118,75 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     author_name = author_name[1..author_name.len()-1].to_string();
                     author_username = author_username[1..author_username.len()-1].to_string();
 
-                    println!("\nAuthor: {} // {} ({})\nCreated Dt: {}\nText: {}\n", 
+                    println!("\nAuthor: {} // {} ({})\nCreated Dt: {}\nTweet Id: {}\nText: {}\n", 
                             author_name, 
                             author_username, 
                             author_id, 
                             created_at,
+                            tweet_id,
                             text);
                 },
                 Err(e) => { info!("main|ERR: unable to parse tweet object|e={:?}", e); },
+            }
+        },
+        "user_timeline" => { 
+            let result = user_timeline(
+                config.get("bearer_token").expect("ERR: bearer_token is invalid"),
+                cli_args.value_of("user_id").expect("ERR: cli [user_id] is invalid"),
+            ).await;
+
+            match result {
+                Ok(df) => {
+                    let id_col: Vec<&str> = df.column("tweet_id")?
+                        .utf8()?
+                        .into_no_null_iter()
+                        .collect();  
+                    let text_col: Vec<&str> = df.column("text")?
+                        .utf8()?
+                        .into_no_null_iter()
+                        .collect();
+                    let created_col: Vec<&str> = df.column("created_at")?
+                        .utf8()?
+                        .into_no_null_iter()
+                        .collect();
+            
+                    for i in 0..id_col.len() {
+                        println!("    {}|{}|{}", id_col[i], created_col[i], text_col[i]);
+                    }
+
+                    info!("main|user_timeline|completed");
+                },
+                Err(e) => { info!("main|ERR: unable to parse dataframe object|e={:?}", e); },
+            }
+        },
+        "mentions_timeline" => {
+            let result = mentions_timeline(
+                config.get("bearer_token").expect("ERR: bearer_token is invalid"),
+                cli_args.value_of("user_id").expect("ERR: cli [user_id] is invalid"),
+            ).await;
+
+            match result {
+                Ok(df) => {
+                    let id_col: Vec<&str> = df.column("tweet_id")?
+                        .utf8()?
+                        .into_no_null_iter()
+                        .collect();  
+                    let text_col: Vec<&str> = df.column("text")?
+                        .utf8()?
+                        .into_no_null_iter()
+                        .collect();
+                    let created_col: Vec<&str> = df.column("created_at")?
+                        .utf8()?
+                        .into_no_null_iter()
+                        .collect();
+            
+                    for i in 0..id_col.len() {
+                        println!("    {}|{}|{}", id_col[i], created_col[i], text_col[i]);
+                    }
+
+                    info!("main|user_timeline|completed");
+                },
+                Err(e) => { info!("main|mentions_timeline|ERR: unable to parse dataframe object|e={:?}", e); },
             }
         },
         _ => {
