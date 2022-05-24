@@ -1,4 +1,4 @@
-# data-extractor-rs
+# honey-faucet-rs
 
 ## DESIGN
 <p>Event-Driven Data Warehouse Creation for NLP and on-chain analytics, with a focus on NFT data. </br></br>
