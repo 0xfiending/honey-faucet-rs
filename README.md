@@ -13,8 +13,19 @@ The modular design allows for scalable, custom ETL pipeline creation by chaining
 
 ## CLI
 <p>The CLI tool is designed to query specific subjects of interest prior to setting up a pipeline. </br>
-The current set of supported actions hit the twitter v2 api endpoint. </br>
+The current set of supported actions hit the twitter v2 api endpoint. </br></br>
+
+Suggested Use (Topic Search): </br>
+- The [Counts] command should be used to gauge how much data there is for a particular topic. </br>
+- The [Recent] command should be used to view the first 100 results of raw tweet data for a particular topic. </br>
+- At this point, if enough data is available for a particular topic, a flow can be set up for it. </br>
+- Otherwise, one can do a deep dive using the [Tweet Lookup], [User Timeline], [Mentions Timeline], or [Users Lookup] commands. </br></br>
+
+Suggested Use (Account R&D - Persons/Projects of Interest): </br>
+- If the unique user name is known, then the user_id can be found using the [Users Lookup] command. </br>
+- Next, the [User Timeline] or [Mentions Timeline] commands can be used to view a portion of the timeline data for a particular user. </br>
 </p>
+
 
 ### Recent Command
 <p align="center" width="15%" size="50%">
