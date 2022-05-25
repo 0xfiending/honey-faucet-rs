@@ -36,6 +36,11 @@ The current set of supported actions hit the twitter v2 api endpoint. </br>
    <img src="work/cli_user_timeline_test_run.png">  
 </p>
 
+### Users Lookup Command
+<p align="center" width="15%" size="50%">
+   <img src="work/cli_users_lookup_test_run.png">  
+</p>
+
 ## NLP Strategy
 <p>Current NFT Sentiment Analysis Design: </br>
 - Collect data for an initial Training and Test Set. </br>
