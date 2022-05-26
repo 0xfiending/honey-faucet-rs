@@ -1,4 +1,5 @@
 use ct_nlp::{
+    users_lookup,
     mentions_timeline,
     user_timeline, 
     get_recent_tweets, 
@@ -156,7 +157,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                     info!("main|user_timeline|completed");
                 },
-                Err(e) => { info!("main|ERR: unable to parse dataframe object|e={:?}", e); },
+                Err(e) => { info!("main|user_timeline|ERR: unable to parse dataframe object|e={:?}", e); },
             }
         },
         "mentions_timeline" => {
@@ -184,9 +185,37 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         println!("    {}|{}|{}", id_col[i], created_col[i], text_col[i]);
                     }
 
-                    info!("main|user_timeline|completed");
+                    info!("main|mentions_timeline|completed");
                 },
                 Err(e) => { info!("main|mentions_timeline|ERR: unable to parse dataframe object|e={:?}", e); },
+            }
+        },
+        "users_lookup" => {
+            println!("testing");
+  
+            let result = users_lookup(
+                config.get("bearer_token").expect("ERR: bearer_token is invalid"),
+                cli_args.value_of("username").expect("ERR: cli [username] is invalid"),
+            ).await;
+
+            match result {
+                Ok(data) => {
+                    let user = match data["data"].as_array() {
+                        Some(user) => user,
+                        None => panic!("main|users_lookup|ERR: unable to parse data object"),
+                    };
+
+                    let mut username = user[0]["username"].to_string();
+                    let mut user_id = user[0]["id"].to_string();
+                    let mut name = user[0]["name"].to_string();
+
+                    username = username[1..username.len()-1].to_string();
+                    user_id = user_id[1..user_id.len()-1].to_string();
+                    name = name[1..name.len()-1].to_string();
+
+                    println!("\nUser: {} // {} ({})\n", name, username, user_id);
+                },
+                Err(e) => info!("main|users_lookup|ERR: unable to parse result object|e={}", e),
             }
         },
         _ => {

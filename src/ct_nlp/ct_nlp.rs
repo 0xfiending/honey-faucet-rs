@@ -16,11 +16,56 @@ struct Tweet {
     user: String,
 }
 
-/*
+pub async fn get_response(
+    bearer_token: &str, 
+    url: &str, 
+    params: Vec<(&str, &str)>,
+) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
+    info!("get_response|starting");
+
+    let tw_client = reqwest::Client::new();
+    let mut response = tw_client.get(url)
+        .query(&params)
+        .header("Authorization", format!("Bearer {}", bearer_token))
+        .send()?;
+
+    match response.status() {
+        StatusCode::OK => info!("get_response|query success"),
+        s => return Err(format!("get_response|status={}", s).into()),
+    }
+
+    let result: serde_json::Value = match response.text() {
+        Ok(x) => serde_json::from_str(&x)?,
+        Err(e) => return Err(format!("get_response|ERR: unable to parse response object|e={}", e).into()),
+    };
+
+    info!("get_response|completed");
+    Ok(result)
+}
+
+
 /// Utility method to query the users_lookup (v2) endpoint
-pub async fn users_lookup(bearer_token: &str, user_id: &str) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
-    
-}*/
+pub async fn users_lookup(bearer_token: &str, username: &str) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
+    info!("users_lookup|starting");
+
+    if bearer_token == "" {
+        return Err(format!("users_lookup|ERR: bearer token is not valid, bearer_token={}", bearer_token).into());
+    }
+
+    if username == "" {
+        return Err(format!("users_lookup|ERR: username is not valid, username={}", username).into());
+    }
+
+    let url = String::from("https://api.twitter.com/2/users/by");
+    info!("users_lookup|url={}", url);
+
+    let params = vec![("usernames", username)];
+    let result = get_response(bearer_token, &url, params).await?;
+
+    info!("users_lookup|completed");
+    Ok(result)
+}
+
 
 /// Utility method to query the mentions timeline (v2) endpoint
 pub async fn mentions_timeline(bearer_token: &str, user_id: &str) -> Result<DataFrame, Box<dyn std::error::Error>> {
@@ -37,27 +82,15 @@ pub async fn mentions_timeline(bearer_token: &str, user_id: &str) -> Result<Data
     let url = format!("https://api.twitter.com/2/users/{id}/mentions", id=user_id);
     info!("mentions_timeline|url={:?}", url);
 
-    let tw_client = reqwest::Client::new();
-    let mut response = tw_client.get(&url)
-        .query(&[
-            ("expansions", "author_id"),
-            ("tweet.fields", "author_id,created_at,text"),
-            ("max_results", "100"),
-        ])
-        .header("Authorization", format!("Bearer {}", bearer_token))
-        .send()?;
+    let params = vec![
+        ("expansions", "author_id"),
+        ("tweet.fields", "author_id,created_at,text"),
+        ("max_results", "100"),
+    ];
 
-    match response.status() {
-        StatusCode::OK => info!("mentions_timeline|query success|parse starting..."),
-        s => return Err(format!("mentions_timeline|status={}", s).into()),
-    }
+    let result = get_response(&bearer_token, &url, params).await?;
 
-    let tmp: serde_json::Value = match response.text() {
-        Ok(x) => serde_json::from_str(&x)?,
-        Err(e) => return Err(format!("mentions_timeline|ERR: unable to parse response object, err={}", e).into()),
-    };
-
-    let data = match tmp["data"].as_array() {
+    let data = match result["data"].as_array() {
         Some(x) => x,
         _ => return Err(format!("mentions_timeline|ERR: unable to parse data object").into()),
     };
@@ -114,27 +147,15 @@ pub async fn user_timeline(bearer_token: &str, user_id: &str) -> Result<DataFram
     let url = format!("https://api.twitter.com/2/users/{id}/tweets", id=user_id);
     info!("user_timeline|url={:?}", url);
 
-    let tw_client = reqwest::Client::new();
-    let mut response = tw_client.get(&url)
-        .query(&[
-            ("expansions", "author_id"),
-            ("tweet.fields", "author_id,created_at,text"),
-            ("max_results", "100"),
-        ])
-        .header("Authorization", format!("Bearer {}", bearer_token))
-        .send()?;
+    let params = vec![
+        ("expansions", "author_id"),
+        ("tweet.fields", "author_id,created_at,text"),
+        ("max_results", "100"),
+    ];
 
-    match response.status() {
-        StatusCode::OK => info!("user_timeline|query success|parse starting..."),
-        s => return Err(format!("user_timeline|status={}", s).into()),
-    }
+    let result = get_response(&bearer_token, &url, params).await?;
 
-    let tmp: serde_json::Value = match response.text() {
-        Ok(x) => serde_json::from_str(&x)?,
-        Err(e) => return Err(format!("user_timeline|ERR: unable to parse response object, err={}", e).into()),
-    };
-
-    let data = match tmp["data"].as_array() {
+    let data = match result["data"].as_array() {
         Some(x) => x,
         _ => return Err(format!("user_timeline|ERR: unable to parse data object").into()),
     };
@@ -191,25 +212,13 @@ pub async fn tweet_lookup(bearer_token: &str, tweet_id: &str) -> Result<serde_js
     let url = format!("https://api.twitter.com/2/tweets/{}", tweet_id);
     info!("tweet_lookup|url={:?}", url);
 
-    let tw_client = reqwest::Client::new();
-    let mut response = tw_client.get(&url)
-        .query(&[
-            ("expansions", "author_id"),
-            ("tweet.fields", "author_id,created_at,text"),
-            ("user.fields", "name,username"),
-        ])
-        .header("Authorization", format!("Bearer {}", bearer_token))
-        .send()?;
+    let params = vec![
+        ("expansions", "author_id"),
+        ("tweet.fields", "author_id,created_at,text"),
+        ("user.fields", "name,username"),
+    ];
 
-    match response.status() {
-        StatusCode::OK => info!("tweet_lookup|query success|parse starting..."),
-        s => return Err(format!("tweet_lookup|status={}", s).into()),
-    }
-
-    let result: serde_json::Value = match response.text() {
-        Ok(x) => serde_json::from_str(&x)?,
-        Err(e) => return Err(format!("tweet_lookup|ERR: unable to parse response object,  err={}", e).into()),
-    };
+    let result = get_response(&bearer_token, &url, params).await?;
 
     info!("tweet_lookup|completed");
     Ok(result)
@@ -233,27 +242,14 @@ pub async fn get_recent_tweets(bearer_token: &str, topic: &str, count: &str) -> 
         
     let url = String::from("https://api.twitter.com/2/tweets/search/recent");
 
-    let tw_client = reqwest::Client::new();
-    let mut response = tw_client.get(&url)
-        .query(&[
-            ("query", topic), 
-            ("tweet.fields", "author_id,created_at,id,text"),
-            ("user.fields", "name,username"),
-            ("expansions", "author_id"),
-            ("max_results", "100")
-        ])
-        .header("Authorization", format!("Bearer {}", bearer_token))
-        .send()?;
+    let params = vec![
+        ("query", topic),
+        ("tweet.fields", "author_id,created_at,id,text"),
+        ("user.fields", "name,username"),
+        ("max_results", "100"),
+    ];
 
-    match response.status() {
-        StatusCode::OK => info!("get_recent_tweets|query success|parse starting..."),
-        s => println!("{}", s),
-    }
-
-    let tmp: serde_json::Value = match response.text() {
-        Ok(x) => serde_json::from_str(&x)?,
-        Err(e) => panic!("{:?}", e),
-    };
+    let result = get_response(&bearer_token, &url, params).await?;    
 
     /*
     let meta = &tmp["meta"]; 
@@ -267,7 +263,7 @@ pub async fn get_recent_tweets(bearer_token: &str, topic: &str, count: &str) -> 
     };
     */
 
-    let data = match tmp["data"].as_array() {
+    let data = match result["data"].as_array() {
         Some(x) => x,
         _ => panic!("error: unable to parse data object from response"),
     };
@@ -313,24 +309,13 @@ pub async fn get_tweet_counts(bearer_token: &str, topic: &str) -> Result<serde_j
 
     let url = String::from("https://api.twitter.com/2/tweets/counts/recent");
 
-    let tw_client = reqwest::Client::new();
-    let mut response = tw_client.get(&url)
-        .query(&[
-            ("query", topic), 
-            ("granularity", "day"),
-        ])
-        .header("Authorization", format!("Bearer {}", bearer_token))
-        .send()?;
 
-    match response.status() {
-        StatusCode::OK => info!("get_tweet_counts|query success|parse starting..."),
-        s => return Err(format!("get_tweet_counts|status={}", s).into()),
-    }
+    let params = vec![
+        ("query", topic),
+        ("granularity", "day"),
+    ];
 
-    let result: serde_json::Value = match response.text() {
-        Ok(x) => serde_json::from_str(&x)?,
-        Err(_) => return Err("get_tweet_counts|ERR: unable to parse response text".into()),
-    };
+    let result = get_response(&bearer_token, &url, params).await?;    
 
     info!("get_tweet_counts|completed");
     Ok(result)
