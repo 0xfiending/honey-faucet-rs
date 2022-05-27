@@ -1,5 +1,5 @@
 [package]
-name = "data-extractor"
+name = "honey-faucet"
 version = "0.1.0"
 edition = "2021"
 authors = ["bkeeper.eth <bkeeper_eth@protonmail.com>"]
@@ -8,8 +8,10 @@ authors = ["bkeeper.eth <bkeeper_eth@protonmail.com>"]
 tokio = { version = "1.15.0", features = [ "full" ] }
 serde = { version = "1.0.135", features = [ "derive" ] }
 reqwest = { version = "0.11.9", features = [ "blocking", "json"] }
-polars = "0.20.0"
-polars-core = "0.20.0"
+diesel = { version = "1.4.4", features = ["postgres"] }
+polars = "0.21.0"
+polars-core = "0.21.0"
+polars-io = { version = "0.21.0", features = ["parquet"] }
 serde_yaml = "0.8.23"
 serde_json = "1.0"
 clap = "3.0.0"
@@ -19,3 +21,4 @@ chrono = "0.4.19"
 
 conf = { path = "src/conf" }
 ct_nlp = { path = "src/ct_nlp" }
+base_diesel = { path = "src/base_diesel" }
