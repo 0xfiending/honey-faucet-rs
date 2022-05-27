@@ -52,6 +52,12 @@ Suggested Use (Account R&D - Persons/Projects of Interest): </br>
    <img src="work/cli_users_lookup_test_run.png">  
 </p>
 
+## SUPPORTED FEATURES
+<p>nlp-recent-topic-land - this flow step will pull and land recents data for a topic.</br>
+nlp-user-timeline-land - this flow step will pull and land standard timeline data for a particular user. (WIP) </br>
+nlp-topic-land - this flow step will pull and land data specified by date for a topic. (BLOCKED - R&D for v1.1 endpoint for archive search) </br>
+</p>
+
 ## NLP Strategy
 <p>Current NFT Sentiment Analysis Design: </br>
 - Collect data for an initial Training and Test Set. </br>
