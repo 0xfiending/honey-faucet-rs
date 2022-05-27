@@ -37,7 +37,8 @@ pub fn init_logger(file_path: &str) {
     let _handle = log4rs::init_config(config);
 }
 
-/// utility fn to parse custom cli args
+/// Utility method to parse custom 
+/// cli args for cli tool
 pub fn parse_args() -> clap::ArgMatches {
     info!("parse_args|starting");
 
@@ -57,6 +58,57 @@ pub fn parse_args() -> clap::ArgMatches {
                 .long("topic")
                 .short('t')
                 .takes_value(true)
+                .required(false),
+            Arg::new("tweet_id")
+                .long("tweet_id")
+                .short('w')
+                .takes_value(true)
+                .required(false),
+            Arg::new("username")
+                .long("username")
+                .short('u')
+                .takes_value(true)
+                .required(false),
+            Arg::new("user_id")
+                .long("user_id")
+                .short('d')
+                .takes_value(true)
+                .required(false),
+            Arg::new("help")
+                .long("help")
+                .short('h'),])
+        .get_matches();
+
+    info!("parse_args|completed");
+    cli_args
+}
+
+/// Utility method to parse custom 
+/// cli args for nlp_topic_land 
+pub fn parse_args1() -> clap::ArgMatches {
+    info!("parse_args|starting");
+
+    let cli_args = Command::new("nlp_topic_land")
+        .args(&[
+            Arg::new("conf")
+                .long("config")
+                .short('c')
+                .takes_value(true)
+                .required(true),
+            Arg::new("topic")
+                .long("topic_id")
+                .short('t')
+                .takes_value(true)
+                .required(true),
+            Arg::new("output")
+                .long("output_dir")
+                .short('o')
+                .takes_value(true)
+                .required(true),
+            Arg::new("job_step")
+                .long("job_step_id")
+                .short('j')
+                .takes_value(true)
                 .required(true),
             Arg::new("help")
                 .long("help")
@@ -66,6 +118,7 @@ pub fn parse_args() -> clap::ArgMatches {
     info!("parse_args|completed");
     cli_args
 }
+
 
 /// Utility fn to read and parse configuration.yaml
 pub fn get_config(config_name: &str) -> BTreeMap<String, String> {

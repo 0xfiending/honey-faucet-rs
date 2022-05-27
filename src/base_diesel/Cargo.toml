@@ -1,0 +1,10 @@
+[package]
+name = "base_diesel"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+dotenv = "0.15.0"
+serde = { version = "1.0.135", features = [ "derive" ] }
+diesel = { version = "1.4.4", features = ["postgres"] }
+serde_json = "1.0"

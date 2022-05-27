@@ -10,7 +10,7 @@ serde = { version = "1.0", features = ["derive"] }
 tokio = { version = "1.0", features = ["full"] }
 log = "0.4.14"
 reqwest = "0.9.24"
-polars = "0.20.0"
+polars = "0.21.1"
 chrono = "0.4.19"
 
 [lib]
