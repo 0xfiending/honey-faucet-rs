@@ -53,12 +53,18 @@ Suggested Use (Account R&D - Persons/Projects of Interest): </br>
 </p>
 
 ## SUPPORTED FEATURES
-<p>nlp-recent-topic-land - this flow step will pull and land recents data for a topic.</br>
-nlp-user-timeline-land - this flow step will pull and land standard timeline data for a particular user. (WIP) </br>
-nlp-topic-land - this flow step will pull and land data specified by date for a topic. (BLOCKED - R&D for v1.1 endpoint for archive search) </br>
+<p>nlp-recent-topic-land - This flow step will pull and land recents data for a topic.</br>
+nlp-user-timeline-land - This flow step will pull and land standard timeline data for a particular user. </br>
+nlp-topic-land - This flow step will pull and land data specified by date for a topic. (WIP - R&D for v1.1 endpoint for archive search) </br>
+flow-controller - This mechanism will facilitate the booting and stopping of jobs based on configured schedules. </br>
+job-controller - This mechanism will facilitate the booting and stopping of job steps. </br>
 </p>
 
-## NLP Strategy
+## NOTES
+*design is subject to change as implementation progresses. </br>
+methodology is agile and re-factoring takes place after each feature is finished. </br>
+
+### NLP Strategy
 <p>Current NFT Sentiment Analysis Design: </br>
 - Collect data for an initial Training and Test Set. </br>
 - Perform standard sentiment analysis on tweet text for a particular topic. </br>
