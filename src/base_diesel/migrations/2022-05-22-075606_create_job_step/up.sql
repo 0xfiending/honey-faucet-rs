@@ -1,6 +1,8 @@
 CREATE TABLE job_step (
     id SERIAL PRIMARY KEY,
     job_id INTEGER REFERENCES job (id) NOT NULL,
+    flow_step_id INTEGER REFERENCES flow_step (id) NOT NULL,
+    sequence_id INTEGER NOT NULL,
     input_path VARCHAR(256) NOT NULL,
     output_path VARCHAR(256) NOT NULL,
     command VARCHAR(256) NOT NULL,

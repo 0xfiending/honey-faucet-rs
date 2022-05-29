@@ -32,6 +32,7 @@ table! {
         flow_id -> Int4,
         status -> Varchar,
         created_dt -> Timestamp,
+        start_dt -> Timestamp,
         updated_dt -> Nullable<Timestamp>,
     }
 }
@@ -40,6 +41,8 @@ table! {
     job_step (id) {
         id -> Int4,
         job_id -> Int4,
+        flow_step_id -> Int4,
+        sequence_id -> Int32,
         input_path -> Varchar,
         output_path -> Varchar,
         command -> Varchar,

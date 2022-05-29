@@ -53,6 +53,7 @@ pub struct Job {
     pub flow_id: i32,
     pub status: String,
     pub created_dt: SystemTime,
+    pub start_dt: SystemTime,
     pub updated_dt: Option<SystemTime>,
 }
 
@@ -61,6 +62,8 @@ pub struct Job {
 pub struct JobStep {
     pub id: i32,    // job_step_id
     pub job_id: i32,
+    pub flow_step_id: i32,
+    pub sequence_id: i32,
     pub input_path: String,
     pub output_path: String,
     pub command: String,
