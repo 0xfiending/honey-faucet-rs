@@ -1,8 +1,8 @@
 CREATE TABLE flow_step (
-    flow_step_id SERIAL PRIMARY KEY,
+    id SERIAL PRIMARY KEY,
     flow_step_name VARCHAR(256) NOT NULL UNIQUE,
     sequence_id INTEGER NOT NULL,
-    flow_id INTEGER REFERENCES flow (flow_id) NOT NULL,
+    flow_id INTEGER REFERENCES flow (id) NOT NULL,
     input_dir VARCHAR(256) NOT NULL,
     output_dir VARCHAR(256) NOT NULL,
     script_path VARCHAR(256) NOT NULL,

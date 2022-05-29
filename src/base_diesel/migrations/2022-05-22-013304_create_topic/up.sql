@@ -1,5 +1,5 @@
 CREATE TABLE topic (
-    topic_id SERIAL PRIMARY KEY,
+    id SERIAL PRIMARY KEY,
     topic_name VARCHAR(256) NOT NULL UNIQUE,
     search_text VARCHAR(256) NOT NULL,
     landing_dir VARCHAR(256),

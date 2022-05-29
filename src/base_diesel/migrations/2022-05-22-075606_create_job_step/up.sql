@@ -1,6 +1,6 @@
 CREATE TABLE job_step (
     id SERIAL PRIMARY KEY,
-    job_id INTEGER REFERENCES job (job_id) NOT NULL,
+    job_id INTEGER REFERENCES job (id) NOT NULL,
     input_path VARCHAR(256) NOT NULL,
     output_path VARCHAR(256) NOT NULL,
     command VARCHAR(256) NOT NULL,

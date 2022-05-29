@@ -1,7 +1,7 @@
 CREATE TABLE flow (
-    flow_id SERIAL PRIMARY KEY,
+    id SERIAL PRIMARY KEY,
     flow_name VARCHAR(256) NOT NULL UNIQUE,
-    topic_id INTEGER REFERENCES topic (topic_id) NOT NULL,
+    topic_id INTEGER REFERENCES topic (id) NOT NULL,
     is_active BOOLEAN DEFAULT FALSE NOT NULL,
     frequency VARCHAR(64) NOT NULL,
     created_dt TIMESTAMP WITHOUT TIME ZONE NOT NULL,
