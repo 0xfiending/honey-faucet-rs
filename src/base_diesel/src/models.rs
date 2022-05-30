@@ -118,6 +118,7 @@ pub struct JobForm<'a> {
     flow_id: i32,
     status: &'a str,
     created_dt: SystemTime,
+    start_dt: SystemTime,
     updated_dt: Option<SystemTime>,
 }
 
@@ -125,6 +126,8 @@ pub struct JobForm<'a> {
 #[table_name = "job_step"]
 pub struct JobStepForm<'a> {
     job_id: i32,
+    flow_step_id: i32,
+    sequence_id: i32,
     input_path: &'a str,
     output_path: &'a str,
     command: &'a str,
