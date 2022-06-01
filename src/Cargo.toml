@@ -5,4 +5,5 @@ members = [
     "ct_nlp",
     "bin",
     "base_diesel",
+    "rust_blocking_queue",
 ]
