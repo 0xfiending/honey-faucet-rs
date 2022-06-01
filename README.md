@@ -56,8 +56,8 @@ Suggested Use (Account R&D - Persons/Projects of Interest): </br>
 <p>nlp-recent-topic-land - This flow step will pull and land recents data for a topic.</br>
 nlp-user-timeline-land - This flow step will pull and land standard timeline data for a particular user. </br>
 nlp-topic-land - This flow step will pull and land data specified by date for a topic. (WIP - R&D for v1.1 endpoint for archive search) </br>
-flow-controller - This mechanism will facilitate the booting and stopping of jobs based on configured schedules. (WIP) </br>
-job-controller - This mechanism will facilitate the booting and stopping of job steps. (WIP) </br>
+flow-controller - This mechanism will facilitate the booting and stopping of jobs based on configured schedules. (v1) </br>
+job-controller - This mechanism will facilitate the booting and stopping of job steps. (v1 - supports single step flows) </br>
 </p>
 
 ## NOTES
