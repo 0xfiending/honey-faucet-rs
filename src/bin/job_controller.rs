@@ -1,34 +1,96 @@
 use conf::{get_config, init_logger};
-
+use serde_json::json;
+use rust_blocking_queue::BlockingQueue;
 use chrono::Utc;
 use log::info;
 use clap::{ArgMatches, Arg, Command};
-use std::collections::BTreeMap;
-use std::time::SystemTime;
+
+use std::{
+    sync::Arc,
+    thread,
+    time::{ 
+        Duration,
+        SystemTime,
+    },
+    collections::BTreeMap,
+
+};
 
 use diesel::prelude::*;
 use diesel::{
     query_dsl::{QueryDsl, RunQueryDsl},
     expression::dsl::now,
     ExpressionMethods,
+    associations::HasTable,
 };
 
 use base_diesel::{
     get_conn,
     schema::{
         job::{
-            dsl::job,
-            id as job_id,
+            dsl::*,
+            id as j_id,
             job_name,
-            flow_id,
-            start_dt,
+            flow_id as job_fid,
             status as job_status,
+            start_dt as job_start,
+            updated_dt as ju_dt,
         },
+        flow_step::{
+            dsl::flow_step,
+            id as fs_id,
+            flow_step_name,
+            sequence_id as fs_sequence_id,
+            flow_id as fs_flow_id,
+            input_dir as fs_input_dir,
+            output_dir as fs_output_dir,
+            script_path as fs_script_path,
+            script_parameters as fs_script_parameters,
+        },
+        job_step::{
+            dsl::*,
+            id as js_id,
+            command as js_cmd,
+            status as js_status,
+            updated_dt as js_dt,
+        },
+    },
+    models::{
+        Job,
+        FlowStep,
+        JobStep,
+        JobStepForm,
     },
 };
 
 fn usage() {
     println!("Usage: cargo run --bin job_controller -- --config <config>");
+}
+
+struct WorkOrder {
+    job_id: i32,
+    job_step_id: i32,
+    script_path: String,
+    script_params: Option<String>,
+    job_start: Option<SystemTime>,
+}
+
+impl WorkOrder {
+    pub fn new(
+        _job_id: i32,
+        _job_step_id: i32,
+        _script_path: String,
+        _script_params: Option<String>,
+        _job_start: Option<SystemTime>,
+    ) -> Self {
+        Self {
+            job_id: _job_id,
+            job_step_id: _job_step_id,
+            script_path: _script_path,
+            script_params: _script_params,
+            job_start: _job_start, 
+        }
+    }
 }
 
 fn parse_args() -> clap::ArgMatches {
@@ -70,31 +132,174 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         config.get("pg_port").expect("ERR: conf [pg_post] is invalid"),
     ) {
         Ok(connection) => {
-            info!("main|conn established");
+            info!("job_controller|conn established");
             connection
         },
         Err(err) => {
-            panic!("main|ERR: failed to connect to db|err={}", err);
+            panic!("job_controller|ERR: failed to connect to db|err={}", err);
         },
     };
 
-    let jobs: Vec<(i32, String, i32, String, SystemTime)> = job
-        .filter(job_status.eq("N"))
-        .select((job_id, job_name, flow_id, job_status, start_dt))
-        .load(&conn)
-        .unwrap_or(vec![]);
 
-    //println!("{:?}", jobs);
-    // for each job, get flow steps
-    // insert job steps
-    // schedule cron job for first sequence_id
-    // update flow status and flow_step status for first sequence
-    // wait
+    ////\\\\////\\\\\/////\\\\\/////\\\\\
+    ////\\\\ worker orchestration //\\\\\
+    ////\\\\ -------------------- ///\\\\
 
-    /*
+    let num_threads = 8;  // default, by len
+
+    let mut shares: Vec<Arc<BlockingQueue<WorkOrder>>> = vec![];
+    for i in 0..num_threads {
+        let share = Arc::new(BlockingQueue::<WorkOrder>::new());
+        shares.push(share);
+    }
+
+    let mut workers: Vec<thread::JoinHandle<_>> = vec![];
+    for i in 0..num_threads {
+        let t_config = String::from(cli_args.value_of("conf").unwrap());
+        let t_share = Arc::clone(&shares[i]);
+
+        let worker = thread::spawn(move || {
+            info!("worker {}|spawning worker...", i);
+
+            let t_queue = t_share.clone();
+            let t_conf: BTreeMap<String, String> = get_config(&t_config);
+            let t_conn = get_conn(
+                t_conf.get("pg_db").unwrap(), 
+                t_conf.get("pg_user").unwrap(),
+                t_conf.get("pg_secret").unwrap(),
+                t_conf.get("pg_host").unwrap(),
+                t_conf.get("pg_port").unwrap(),
+            ).unwrap(); 
+
+            loop {
+                let next_job = t_queue.de_q();
+
+                // sentinel
+                if next_job.job_step_id == -777 {
+                    break;
+                }
+
+                // TODO: schedule and run task 
+                let cmd_str = match next_job.script_params {
+                    Some(params) => format!("{} {}", next_job.script_path, params),
+                    None => format!("{}", next_job.script_path),
+                };
+
+                let now_dt = SystemTime::now();
+                let result = diesel::update(job_step)
+                    .filter(js_id.eq(next_job.job_step_id))
+                    .set((
+                        js_status.eq("S"),
+                        js_cmd.eq(cmd_str),
+                        js_dt.eq(now_dt),
+                    ))
+                    .get_result::<JobStep>(&t_conn);
+
+                /*
+                match result {
+                    Ok(_)
+                }*/
+            }
+            info!("worker {}|worker shutting down..", i);
+        });
+
+        workers.push(worker);
+    }
+
+    /////////////////////////////////////////////
+    // mission control ->> assembly line start //
+    ////////////////////////////////////////////
+    
+    let num_threads = 7;   // default, by index
+
     loop {
-        
+        let jobs: Vec<(i32, String, i32, SystemTime)> = job
+            .filter(job_status.eq("N"))
+            .select((j_id, job_name, job_fid, job_start))
+            .load(&conn)
+            .unwrap_or(vec![]);
 
-    }*/
+        if jobs.len() > 0 {
+            info!("loop_controller|processing {} jobs", jobs.len());
+            let now_dt = SystemTime::now();
+            let mut queue_counter = 0;
+
+            for _job in jobs {
+                let (_job_id, _job_name, _flow_id, _start_dt) = _job;
+                info!("loop_controller|processing job_id {}", _job_id);
+
+                let steps: Vec<(i32, i32, String, String, String, Option<String>)> = flow_step
+                    .filter(fs_id.eq(_flow_id))
+                    .select((fs_id, fs_sequence_id, fs_input_dir, fs_output_dir, fs_script_path, fs_script_parameters))
+                    .load(&conn)
+                    .unwrap_or(vec![]);
+                
+                if steps.is_empty() {
+                    info!("loop_controller|ERR: no flow_steps found for flow_id={}", _flow_id);
+                    continue;
+                }
+
+                for _step in steps {
+                    let (_fs_id, _fs_sequence_id, _fs_input_dir, _fs_output_dir, _fs_script_path, _fs_script_parameters) = _step;         
+
+                    let new_job_step = json!({
+                        "job_id": Some(_job_id),
+                        "flow_step_id": Some(_fs_id),
+                        "sequence_id": Some(_fs_sequence_id),
+                        "input_path": _fs_input_dir,
+                        "output_path": _fs_output_dir,
+                        "command": Some(""),
+                        "status": "N",
+                        "created_dt": now_dt,
+                        "updated_dt": Some(now_dt),
+                    });
+
+                    let json_str = new_job_step.to_string();
+                    let new_job_step_form = serde_json::from_str::<JobStepForm>(&json_str)?;
+
+                    match diesel::insert_into(job_step)
+                        .values(&new_job_step_form)
+                        .get_result::<JobStep>(&conn)
+                    {
+                        Ok(result) => {
+                            let work_order = WorkOrder::new(
+                                _job_id,
+                                result.id,
+                                _fs_script_path,
+                                _fs_script_parameters,
+                                Some(now_dt),
+                            );
+
+                            shares[queue_counter].en_q(work_order);
+
+                            match queue_counter {
+                                num_threads => { queue_counter = 0; },
+                                _ => { queue_counter += 1; },
+                            }
+                        },
+                        Err(err) => {
+                            info!("loop_controller|ERR: unable to fill work order|err={}", err);
+                            continue;
+                        }, 
+                    }
+                }
+
+                // update job status
+                let result = diesel::update(job)
+                    .filter(j_id.eq(_job_id))
+                    .set((
+                        job_status.eq("S"),
+                        ju_dt.eq(now_dt),
+                    ))
+                    .get_result::<Job>(&conn);
+
+                match result {
+                    Ok(_) => info!("loop_controller|seeded job steps for job_id={}", _job_id),
+                    Err(err) => info!("loop_controller|ERR: failed to update db for job_id={}|err={}", _job_id, err),
+                }
+            }
+        }
+    }
+
     Ok(())
 }
