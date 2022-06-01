@@ -52,19 +52,21 @@ Suggested Use (Account R&D - Persons/Projects of Interest): </br>
    <img src="work/cli_users_lookup_test_run.png">  
 </p>
 
+## AUTOMATED PIPELINE EXECUTION
+<p>flow-controller - This mechanism will facilitate the booting and stopping of jobs for the day based on configured cron schedules. </br>
+job-controller - This mechanism will facilitate the scheduling and execution of job steps. </br>
+</p>
+
 ## SUPPORTED FEATURES
 <p>nlp-recent-topic-land - This flow step will pull and land recents data for a topic.</br>
 nlp-user-timeline-land - This flow step will pull and land standard timeline data for a particular user. </br>
 nlp-topic-land - This flow step will pull and land data specified by date for a topic. (WIP - R&D for v1.1 endpoint for archive search) </br>
-flow-controller - This mechanism will facilitate the booting and stopping of jobs based on configured schedules. (v1) </br>
-job-controller - This mechanism will facilitate the booting and stopping of job steps. (v1 - supports single step flows) </br>
 </p>
 
 ## NOTES
 *design is subject to change as implementation progresses. </br>
 methodology is agile and re-factoring takes place after each feature is finished. </br>
 
-### NLP Strategy
 <p>Current NFT Sentiment Analysis Design: </br>
 - Collect data for an initial Training and Test Set. </br>
 - Perform standard sentiment analysis on tweet text for a particular topic. </br>
@@ -75,7 +77,6 @@ methodology is agile and re-factoring takes place after each feature is finished
 - R&D on analysis tuning
 </p>
 
-### NLP PIPELINE DESIGN
 <p>The current design will consist of a 4-step Flow. </br>
 - The first step will be called nlp-topic-land. </br>
 ---- This step will pull data down from Twitter and save it in a parquet file format. </br>
