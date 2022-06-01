@@ -1,16 +1,14 @@
 use conf::{get_config, init_logger};
 
-use diesel::prelude::*;
 use diesel::{
     query_dsl::{QueryDsl, RunQueryDsl},
-    expression::dsl::now,
     ExpressionMethods,
 };
 
 use base_diesel::{
     get_conn,
     models::{
-        Flow,
+        //Flow,
         Job,
         JobForm,
     },
@@ -18,7 +16,7 @@ use base_diesel::{
         job,
         flow::{
             id as flow_id,
-            topic_id as ft_id,
+            //topic_id as ft_id,
             flow_name,
             is_active,
             frequency,
@@ -38,14 +36,12 @@ use std::{
 };
 
 use serde_json::json;
-use serde::{Serialize, Deserialize};
-
 use cron::Schedule;
-use chrono::{TimeZone, DateTime, Utc};
-
+use chrono::Utc;
 use log::info;
 use clap::{ArgMatches, Arg, Command};
 
+#[allow(dead_code)]
 fn usage() {
     println!("Usage: cargo run --bin flow_controller -- --config <config>");
 }
@@ -113,7 +109,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let schedule = match Schedule::from_str(&_frequency) {
                     Ok(s) => s,
                     Err(err) => {
-                        info!("main|schedule cannot be parsed|frequency={}", _frequency); 
+                        info!("main|schedule cannot be parsed|frequency={}|err={}", _frequency, err); 
                         continue
                     },
                 };
@@ -178,6 +174,4 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         } else { println!("main|no active flows found"); }
     }
-
-    Ok(())
 }

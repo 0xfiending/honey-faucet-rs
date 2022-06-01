@@ -9,19 +9,16 @@ use std::{
     sync::Arc,
     thread,
     time::{ 
-        Duration,
+        //Duration,
         SystemTime,
     },
     collections::BTreeMap,
 
 };
 
-use diesel::prelude::*;
 use diesel::{
     query_dsl::{QueryDsl, RunQueryDsl},
-    expression::dsl::now,
     ExpressionMethods,
-    associations::HasTable,
 };
 
 use base_diesel::{
@@ -39,9 +36,7 @@ use base_diesel::{
         flow_step::{
             dsl::flow_step,
             id as fs_id,
-            flow_step_name,
             sequence_id as fs_sequence_id,
-            flow_id as fs_flow_id,
             input_dir as fs_input_dir,
             output_dir as fs_output_dir,
             script_path as fs_script_path,
@@ -57,18 +52,17 @@ use base_diesel::{
     },
     models::{
         Job,
-        FlowStep,
         JobStep,
         JobStepForm,
     },
 };
 
+#[allow(dead_code)]
 fn usage() {
     println!("Usage: cargo run --bin job_controller -- --config <config>");
 }
 
 struct WorkOrder {
-    job_id: i32,
     job_step_id: i32,
     script_path: String,
     script_params: Option<String>,
@@ -77,14 +71,12 @@ struct WorkOrder {
 
 impl WorkOrder {
     pub fn new(
-        _job_id: i32,
         _job_step_id: i32,
         _script_path: String,
         _script_params: Option<String>,
         _job_start: Option<SystemTime>,
     ) -> Self {
         Self {
-            job_id: _job_id,
             job_step_id: _job_step_id,
             script_path: _script_path,
             script_params: _script_params,
@@ -109,6 +101,13 @@ fn parse_args() -> clap::ArgMatches {
 
     cli_args
 }
+
+
+// TODO: 
+//  - A novel way to handle and populate args
+//  - Propagate errors to db (missing a few pieces)
+//  - Propagate errors back to master thread
+//  - Add timeouts to threads and master
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -148,7 +147,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let num_threads = 8;  // default, by len
 
     let mut shares: Vec<Arc<BlockingQueue<WorkOrder>>> = vec![];
-    for i in 0..num_threads {
+    for _i in 0..num_threads {
         let share = Arc::new(BlockingQueue::<WorkOrder>::new());
         shares.push(share);
     }
@@ -159,7 +158,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let t_share = Arc::clone(&shares[i]);
 
         let worker = thread::spawn(move || {
-            info!("worker {}|spawning worker...", i);
+            let worker_id = i;
+            info!("worker {}|spawning worker...", worker_id);
 
             let t_queue = t_share.clone();
             let t_conf: BTreeMap<String, String> = get_config(&t_config);
@@ -180,27 +180,31 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
 
                 // TODO: schedule and run task 
+                
+
                 let cmd_str = match next_job.script_params {
                     Some(params) => format!("{} {}", next_job.script_path, params),
                     None => format!("{}", next_job.script_path),
                 };
 
+
+
+
                 let now_dt = SystemTime::now();
-                let result = diesel::update(job_step)
+                match diesel::update(job_step)
                     .filter(js_id.eq(next_job.job_step_id))
                     .set((
                         js_status.eq("S"),
                         js_cmd.eq(cmd_str),
                         js_dt.eq(now_dt),
                     ))
-                    .get_result::<JobStep>(&t_conn);
-
-                /*
-                match result {
-                    Ok(_)
-                }*/
+                    .get_result::<JobStep>(&t_conn) 
+                {
+                    Ok(result) => info!("worker {}|successfully scheduled job_step_id {}", worker_id, result.id),
+                    Err(err) => info!("worker {}|ERR: failed to update job step, e={}", worker_id, err),
+                }
             }
-            info!("worker {}|worker shutting down..", i);
+            info!("worker {}|worker shutting down..", worker_id);
         });
 
         workers.push(worker);
@@ -210,7 +214,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // mission control ->> assembly line start //
     ////////////////////////////////////////////
     
-    let num_threads = 7;   // default, by index
+    let num_threads = 7 as usize;   // default, by index
 
     loop {
         let jobs: Vec<(i32, String, i32, SystemTime)> = job
@@ -263,7 +267,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     {
                         Ok(result) => {
                             let work_order = WorkOrder::new(
-                                _job_id,
                                 result.id,
                                 _fs_script_path,
                                 _fs_script_parameters,
@@ -272,9 +275,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                             shares[queue_counter].en_q(work_order);
 
-                            match queue_counter {
-                                num_threads => { queue_counter = 0; },
-                                _ => { queue_counter += 1; },
+                            if queue_counter == num_threads {
+                                queue_counter = 0;
+                            } else {
+                                queue_counter += 1;
                             }
                         },
                         Err(err) => {
@@ -300,6 +304,4 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
     }
-
-    Ok(())
 }

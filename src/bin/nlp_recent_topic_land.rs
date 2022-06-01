@@ -8,10 +8,10 @@ use diesel::{
 };
 
 use base_diesel::{
-    models::{Topic, JobStep},
+    models::JobStep,
     schema::{
         topic::dsl::topic,
-        topic::topic_id,
+        topic::id as topic_id,
         topic::search_text,
     },
     schema::{
@@ -34,8 +34,9 @@ use log::info;
 use clap::ArgMatches;
 use chrono::Utc;
 use polars::prelude::*;
-use polars::frame::DataFrame;
+//use polars::frame::DataFrame;
 
+#[allow(dead_code)]
 fn usage() {
     println!("Usage: cargo run 
     --bin nlp_recent_topic_land 
@@ -69,6 +70,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     init_logger(&log_path);
     info!("main|starting");
     info!("main|topic_id={}", t_id);
+    info!("main|job_step_id={}", js_id);
 
     let conn = match get_conn(
         config.get("pg_db").expect("ERR: conf [pg_db] is invalid"),
@@ -129,21 +131,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     match df {
         Ok(frame) => {
             let mut out_df: polars::frame::DataFrame = frame;
-            let mut output_file = File::create(out_path).expect("main|ERR: cannot create output file");
-            ParquetWriter::new(output_file)
-                .finish(&mut out_df);
-
-            info!("main|file created successfully");
+            let output_file = File::create(out_path).expect("main|ERR: cannot create output file");
+            match ParquetWriter::new(output_file)
+                .finish(&mut out_df) 
+            {
+                Ok(_) => info!("main|file created successfully"),
+                Err(err) => info!("main|ERR: unable to write to file|e={}", err),
+            }
         },
-        Err(e) => { 
+        Err(err) => { 
             // update failure
-            panic!("main|ERR: unable to write to file");
+            panic!("main|ERR: unable to write to file|e={}", err);
         },
     }
 
     // update flow 
     let result = diesel::update(job_step)
-        .filter(id.eq(t_id))
+        .filter(id.eq(js_id))
         .set((
             status.eq("C"),
             updated_dt.eq(now),
