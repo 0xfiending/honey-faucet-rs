@@ -1,0 +1,6 @@
+CREATE USER keep01 PASSWORD '';
+CREATE DATABASE prod;
+GRANT ALL PRIVILEGES ON DATABASE prod TO keep01;
+GRANT ALL PRIVILEGES ON DATABASE prod TO postgres;  --grant admin access
+
+\c prod;
