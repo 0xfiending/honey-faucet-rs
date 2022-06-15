@@ -237,7 +237,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         }
 
-        let jobs: Vec<(i32, String, i32, SystemTime)> = job
+        let jobs: Vec<(i32, String, i32, Option<SystemTime>)> = job
             .filter(_job_status.eq("N"))
             .select((
                     _job_id, 

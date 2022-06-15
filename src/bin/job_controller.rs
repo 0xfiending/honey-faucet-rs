@@ -1,24 +1,26 @@
 use conf::{get_config, init_logger};
 use serde_json::json;
 use rust_blocking_queue::BlockingQueue;
-use chrono::Utc;
+use chrono::{Utc, DateTime, Datelike, Timelike};
 use log::info;
 use clap::{ArgMatches, Arg, Command};
+
+use lightspeed_scheduler::job::Job;
+use lightspeed_scheduler::{new_executor_with_utc_tz, JobExecutor};
+use tokio::task;
 
 use std::{
     sync::Arc,
     thread,
-    time::{ 
-        //Duration,
-        SystemTime,
-    },
+    time::{SystemTime, Duration}, 
     collections::BTreeMap,
-
 };
 
 use diesel::{
     query_dsl::{QueryDsl, RunQueryDsl},
     ExpressionMethods,
+    NullableExpressionMethods,
+    JoinOnDsl,
 };
 
 use base_diesel::{
@@ -26,32 +28,40 @@ use base_diesel::{
     schema::{
         job::{
             dsl::*,
-            id as j_id,
-            job_name,
-            flow_id as job_fid,
-            status as job_status,
-            start_dt as job_start,
-            updated_dt as ju_dt,
+            id as _job_id,
+            job_name as _job_name,
+            flow_id as _job_flow_id,
+            status as _job_status,
+            start_dt as _job_start_dt,
+            updated_dt as _job_updated_dt,
         },
         flow_step::{
             dsl::flow_step,
-            id as fs_id,
-            sequence_id as fs_sequence_id,
-            input_dir as fs_input_dir,
-            output_dir as fs_output_dir,
-            script_path as fs_script_path,
-            script_parameters as fs_script_parameters,
+            id as _flow_step_id,
+            flow_id as _fs_flow_id,
+            sequence_id as _fs_sequence_id,
+            input_dir as _fs_input_dir,
+            output_dir as _fs_output_dir,
+            script_path as _fs_script_path,
+            script_parameters as _fs_script_parameters,
         },
         job_step::{
             dsl::*,
-            id as js_id,
-            command as js_cmd,
-            status as js_status,
-            updated_dt as js_dt,
+            id as _job_step_id,
+            flow_step_id as _js_flow_step_id,
+            job_id as _js_job_id,
+            command as _command,
+            status as _job_step_status,
+            updated_dt as _js_updated_dt,
+        },
+        flow::{
+            dsl::*,
+            topic_id as _topic_id,
+            id as _flow_id,
         },
     },
     models::{
-        Job,
+        Job as JobModel,
         JobStep,
         JobStepForm,
     },
@@ -64,23 +74,35 @@ fn usage() {
 
 struct WorkOrder {
     job_step_id: i32,
-    script_path: String,
-    script_params: Option<String>,
+    status_cd: String,
+    subject_id: Option<i32>,
     job_start: Option<SystemTime>,
+    script_name: String,
+    script_params: Option<String>,
+    in_path: Option<String>,
+    out_path: Option<String>,
 }
 
 impl WorkOrder {
     pub fn new(
-        _job_step_id: i32,
-        _script_path: String,
-        _script_params: Option<String>,
-        _job_start: Option<SystemTime>,
+        job_step_id: i32,
+        status_cd: String,
+        subject_id: Option<i32>,
+        job_start: Option<SystemTime>,
+        script_name: String,
+        script_params: Option<String>,
+        in_path: Option<String>,
+        out_path: Option<String>,
     ) -> Self {
         Self {
-            job_step_id: _job_step_id,
-            script_path: _script_path,
-            script_params: _script_params,
-            job_start: _job_start, 
+            job_step_id: job_step_id,
+            status_cd: status_cd,
+            subject_id: subject_id,
+            job_start: job_start,
+            script_name: script_name,
+            script_params: script_params,
+            in_path: in_path,
+            out_path: out_path,
         }
     }
 }
@@ -102,18 +124,11 @@ fn parse_args() -> clap::ArgMatches {
     cli_args
 }
 
-
-// TODO: 
-//  - A novel way to handle and populate args
-//  - Propagate errors to db (missing a few pieces)
-//  - Propagate errors back to master thread
-//  - Add timeouts to threads and master
-
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli_args: ArgMatches = parse_args();
-    let config_name = cli_args.value_of("conf").expect("ERR: cli [configuration] is invalid");
-    let config: BTreeMap<String, String> = get_config(config_name);
+    let config_name = String::from(cli_args.value_of("conf").expect("ERR: cli [configuration] is invalid"));
+    let config: BTreeMap<String, String> = get_config(&config_name);
 
     let dt = Utc::now().to_rfc3339();
     let log_dir = String::from(config.get("log_dir").expect("ERR: log_dir is invalid"));
@@ -139,12 +154,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         },
     };
 
+    ////\\\\//////\\\\\\//////\\\\\/////\\\\
+    ////\\\\  worker orchestration  ////\\\\
+    ////\\\\\ -------------------- /////\\\\
 
-    ////\\\\////\\\\\/////\\\\\/////\\\\\
-    ////\\\\ worker orchestration //\\\\\
-    ////\\\\ -------------------- ///\\\\
-
-    let num_threads = 8;  // default, by len
+    let num_threads = 8;       // by len
 
     let mut shares: Vec<Arc<BlockingQueue<WorkOrder>>> = vec![];
     for _i in 0..num_threads {
@@ -152,13 +166,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         shares.push(share);
     }
 
-    let mut workers: Vec<thread::JoinHandle<_>> = vec![];
+    let mut workers: Vec<tokio::task::JoinHandle<_>> = vec![];
     for i in 0..num_threads {
         let t_config = String::from(cli_args.value_of("conf").unwrap());
         let t_share = Arc::clone(&shares[i]);
 
-        let worker = thread::spawn(move || {
+        let worker = task::spawn(async move {
             let worker_id = i;
+            let executor = new_executor_with_utc_tz();
             info!("worker {}|spawning worker...", worker_id);
 
             let t_queue = t_share.clone();
@@ -174,37 +189,233 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             loop {
                 let next_job = t_queue.de_q();
 
-                // sentinel
-                if next_job.job_step_id == -777 {
+                if !next_job.status_cd.eq("S") { continue; }
+                if next_job.subject_id == None { 
+                    info!("worker {}|next job - subject id is invalid", worker_id); 
+                    continue; 
+                }
+                if next_job.script_name.eq("") { 
+                    info!("worker {}|next job - script name is invalid", worker_id); 
+                    continue; 
+                }
+
+                // POISON - OP: FAULT
+                if next_job.job_step_id == -9999 {
                     break;
                 }
 
-                // TODO: schedule and run task 
-                
+                // SENTINEL - OP: FLUSH
+                if next_job.job_step_id == -8888 {
+                    // check if jobs are running
+                    continue;
+                }
 
-                let cmd_str = match next_job.script_params {
-                    Some(params) => format!("{} {}", next_job.script_path, params),
-                    None => format!("{}", next_job.script_path),
-                };
+                // SCHEDULER - OP: WORK
+                match next_job.job_start {
+                    Some(x) => {            // LIGHTSPEED 
+                        info!("worker {}|scheduler start", worker_id);
+                        let script_path = String::from(next_job.script_name);
+                        let script_opts = next_job.script_params;
+                        let conf_nm = t_config.clone();
 
+                        let p = lightspeed_scheduler::job::Job::new(
+                            format!("worker {}", worker_id),                 // group
+                            format!("job step {}", next_job.job_step_id),    // name
+                            None,                                            // retries
+                            move || {
+                                let bin_nm = script_path.clone();
+                                let bin_opts = script_opts.clone();
+                                let bin_conf = conf_nm.clone();
 
+                                // let cmd_args
 
+                                let script_params = match bin_opts {
+                                    Some(y) => y.split(" ").map(|y| String::from(y)).collect(),
+                                    None => vec![],
+                                };
 
-                let now_dt = SystemTime::now();
-                match diesel::update(job_step)
-                    .filter(js_id.eq(next_job.job_step_id))
-                    .set((
-                        js_status.eq("S"),
-                        js_cmd.eq(cmd_str),
-                        js_dt.eq(now_dt),
-                    ))
-                    .get_result::<JobStep>(&t_conn) 
-                {
-                    Ok(result) => info!("worker {}|successfully scheduled job_step_id {}", worker_id, result.id),
-                    Err(err) => info!("worker {}|ERR: failed to update job step, e={}", worker_id, err),
+                                let mut cmd_args: Vec<String> = vec![];
+                                cmd_args.push("run".into());
+                                cmd_args.push("--bin".into());
+                                cmd_args.push(bin_nm);
+                                cmd_args.push("--".into());
+
+                                // standard opts
+                                for script_opt in script_params {
+                                match script_opt.as_str() {
+                                "--topic_id" => {
+                                    match next_job.subject_id {
+                                        Some(subject) => {
+                                            let opt_val = String::from(format!("{}", subject));
+                                            cmd_args.push("--topic_id".into());
+                                            cmd_args.push(opt_val);
+                                        },
+                                        None => { 
+                                            info!("invalid topic id found while parsing command opts, re-configure");
+                                            continue
+                                        }
+                                    }
+                                },
+                                "--job_step_id" => {
+                                    cmd_args.push("--job_step_id".into());
+                                    cmd_args.push(String::from(format!("{}", next_job.job_step_id)));
+                                },
+                                "--config" => {
+                                    cmd_args.push("--config".into());
+                                    cmd_args.push(bin_conf.clone());
+                                },
+                                "--input_dir" => {
+                                    match &next_job.in_path {
+                                        Some(in_val) => {
+                                            cmd_args.push("--input_dir".into());
+                                            cmd_args.push(in_val.to_string());
+                                        },
+                                        None => {
+                                            info!("invalid input path found while parsing command opts, re-configure");
+                                            continue
+                                        },
+                                    }
+                                },
+                                "--output_dir" => {
+                                    match &next_job.out_path {
+                                        Some(out_val) => {
+                                            cmd_args.push("--output_dir".into());
+                                            cmd_args.push(out_val.to_string());
+                                        },
+                                        None => { 
+                                            info!("invalid output path found while parsing command opts, re-configure");
+                                            continue
+                                        },
+                                    }
+                                },
+                                _ => { info!("DEFAULT found while parsing command opts"); },
+                                }}
+
+                                Box::pin(async move {
+                                    tokio::process::Command::new("cargo")
+                                        .args(&cmd_args)
+                                        .output()
+                                        .await
+                                        .expect("ERR: cargo command failed"); 
+
+                                    Ok(())
+                               })
+                        });
+
+                        let dt_start: DateTime<Utc> = x.clone().into();
+
+                        // 1:S 2:M 3:H 4:d 5:m 6:DoW 7:Y
+                        let formatted_start = String::from(
+                            format!("{} {} {} {} {} * {}",
+                                dt_start.second(),
+                                dt_start.minute(),
+                                dt_start.hour(),
+                                dt_start.day(),
+                                dt_start.month(),
+                                dt_start.year(),)
+                        );
+
+                        let mut trigger: Vec<String> = vec![];
+                        trigger.push(formatted_start);
+                        executor.add_job(&trigger, p);
+
+                        let now_dt = SystemTime::now();
+                        match diesel::update(job_step)
+                            .filter(_job_step_id.eq(next_job.job_step_id))
+                            .set((
+                                _job_step_status.eq("R"),
+                                _command.eq(""),                  // TODO: update cmd_str
+                                _js_updated_dt.eq(Some(now_dt)),
+                            ))
+                            .get_result::<JobStep>(&t_conn) 
+                        {
+                            Ok(result) => info!("worker {}|successfully scheduled job_step_id {}", worker_id, result.id),
+                            Err(err) => info!("worker {}|ERR: failed to update job step, e={}", worker_id, err),
+                        }
+
+                        info!("worker {}|scheduler complete", worker_id);
+                    },
+                    None => {               // AD-HOC
+                        info!("worker {}|ad-hoc execution start", worker_id);
+
+                        // update db to running state
+                         
+                        let script_params = match next_job.script_params {
+                            Some(x) => x.split(" ").map(|x| String::from(x)).collect(),
+                            None => vec![],
+                        };
+
+                        let mut cmd_args: Vec<String> = vec![];
+                        cmd_args.push("run".into());
+                        cmd_args.push("--bin".into());
+                        cmd_args.push(next_job.script_name);
+                        cmd_args.push("--".into());
+
+                        // standard opts
+                        for script_opt in script_params {
+                        match script_opt.as_str() {
+                            "--topic_id" => {
+                                match next_job.subject_id {
+                                    Some(subject) => {
+                                        let opt_val = String::from(format!("{}", subject));
+                                        cmd_args.push("--topic_id".into());
+                                        cmd_args.push(opt_val);
+                                    },
+                                    None => { 
+                                        info!("invalid topic id found while parsing command opts, re-configure");
+                                        continue
+                                    }
+                                }
+                            },
+                            "--job_step_id" => {
+                                cmd_args.push("--job_step_id".into());
+                                cmd_args.push(String::from(format!("{}", next_job.job_step_id)));
+                            },
+                            "--config" => {
+                                let conf_opt = String::from(format!("{}", t_config));
+                                cmd_args.push("--config".into());
+                                cmd_args.push(conf_opt);
+                            },
+                            "--input_dir" => {
+                                match &next_job.in_path {
+                                    Some(in_val) => {
+                                        cmd_args.push("--input_dir".into());
+                                        cmd_args.push(in_val.to_string());
+                                    },
+                                    None => {
+                                        info!("invalid input path found while parsing command opts, re-configure");
+                                        continue
+                                    },
+                                }
+                            },
+                            "--output_dir" => {
+                                match &next_job.out_path {
+                                    Some(out_val) => {
+                                        cmd_args.push("--output_dir".into());
+                                        cmd_args.push(out_val.to_string());
+                                    },
+                                    None => { 
+                                        info!("invalid output path found while parsing command opts, re-configure");
+                                        continue
+                                    },
+                                }
+                            },
+                            _ => { info!("DEFAULT found while parsing command opts"); },
+                        }}
+
+                        tokio::process::Command::new("cargo")
+                            .args(&cmd_args)
+                            .output()
+                            .await
+                            .expect("ERR: cargo command failed");
+
+                        info!("worker {}|ad-hoc execution complete", worker_id);
+                    },
                 }
             }
+                
             info!("worker {}|worker shutting down..", worker_id);
+            executor.stop(true).await.unwrap();
         });
 
         workers.push(worker);
@@ -214,94 +425,69 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // mission control ->> assembly line start //
     ////////////////////////////////////////////
     
-    let num_threads = 7 as usize;   // default, by index
+    let num_threads = num_threads-1 as usize;   // by index
+    let mut queue_counter = 0;                  // global queue index
 
     loop {
-        let jobs: Vec<(i32, String, i32, SystemTime)> = job
-            .filter(job_status.eq("N"))
-            .select((j_id, job_name, job_fid, job_start))
+        let launch_steps: Vec<(i32, String, Option<SystemTime>, Option<i32>, String, Option<String>, String, String)> = job_step
+            .inner_join(flow_step.on(_flow_step_id.eq(_js_flow_step_id)))
+            .inner_join(job.on(_job_id.eq(_js_job_id)))
+            .inner_join(flow.on(_flow_id.eq(_fs_flow_id)))
+            .filter(_job_step_status.eq("S"))
+            .filter(_job_status.eq("S"))
+            .select((
+                _job_step_id,
+                _job_step_status,
+                _job_start_dt,
+                _topic_id.nullable(),
+                _fs_script_path,
+                _fs_script_parameters,
+                _fs_input_dir,
+                _fs_output_dir,
+            ))
             .load(&conn)
             .unwrap_or(vec![]);
 
-        if jobs.len() > 0 {
-            info!("loop_controller|processing {} jobs", jobs.len());
+        let mut n = 0;     
+        if launch_steps.len() == 0 {
+            info!("main|no launch steps found|skipping...");
+        } else {
+            info!("main|processing {} launch steps", launch_steps.len());
             let now_dt = SystemTime::now();
-            let mut queue_counter = 0;
+            
+            for launch_step in launch_steps {
+                let (
+                    js_id,
+                    stat_cd,
+                    start_time,
+                    subject_id,
+                    target_script,
+                    target_opts,
+                    in_path,
+                    out_path,
+                ) = launch_step;
 
-            for _job in jobs {
-                let (_job_id, _job_name, _flow_id, _start_dt) = _job;
-                info!("loop_controller|processing job_id {}", _job_id);
+                let work_order = WorkOrder::new(
+                    js_id as i32,
+                    stat_cd,
+                    subject_id,
+                    start_time,
+                    target_script,
+                    target_opts,
+                    Some(in_path),
+                    Some(out_path),
+                );
 
-                let steps: Vec<(i32, i32, String, String, String, Option<String>)> = flow_step
-                    .filter(fs_id.eq(_flow_id))
-                    .select((fs_id, fs_sequence_id, fs_input_dir, fs_output_dir, fs_script_path, fs_script_parameters))
-                    .load(&conn)
-                    .unwrap_or(vec![]);
-                
-                if steps.is_empty() {
-                    info!("loop_controller|ERR: no flow_steps found for flow_id={}", _flow_id);
-                    continue;
-                }
-
-                for _step in steps {
-                    let (_fs_id, _fs_sequence_id, _fs_input_dir, _fs_output_dir, _fs_script_path, _fs_script_parameters) = _step;         
-
-                    let new_job_step = json!({
-                        "job_id": Some(_job_id),
-                        "flow_step_id": Some(_fs_id),
-                        "sequence_id": Some(_fs_sequence_id),
-                        "input_path": _fs_input_dir,
-                        "output_path": _fs_output_dir,
-                        "command": Some(""),
-                        "status": "N",
-                        "created_dt": now_dt,
-                        "updated_dt": Some(now_dt),
-                    });
-
-                    let json_str = new_job_step.to_string();
-                    let new_job_step_form = serde_json::from_str::<JobStepForm>(&json_str)?;
-
-                    match diesel::insert_into(job_step)
-                        .values(&new_job_step_form)
-                        .get_result::<JobStep>(&conn)
-                    {
-                        Ok(result) => {
-                            let work_order = WorkOrder::new(
-                                result.id,
-                                _fs_script_path,
-                                _fs_script_parameters,
-                                Some(now_dt),
-                            );
-
-                            shares[queue_counter].en_q(work_order);
-
-                            if queue_counter == num_threads {
-                                queue_counter = 0;
-                            } else {
-                                queue_counter += 1;
-                            }
-                        },
-                        Err(err) => {
-                            info!("loop_controller|ERR: unable to fill work order|err={}", err);
-                            continue;
-                        }, 
-                    }
-                }
-
-                // update job status
-                let result = diesel::update(job)
-                    .filter(j_id.eq(_job_id))
-                    .set((
-                        job_status.eq("S"),
-                        ju_dt.eq(now_dt),
-                    ))
-                    .get_result::<Job>(&conn);
-
-                match result {
-                    Ok(_) => info!("loop_controller|seeded job steps for job_id={}", _job_id),
-                    Err(err) => info!("loop_controller|ERR: failed to update db for job_id={}|err={}", _job_id, err),
-                }
+                shares[queue_counter].en_q(work_order);
+                if queue_counter == num_threads { queue_counter = 0; } 
+                else { queue_counter += 1; }
+            
+                n += 1;
             }
         }
+
+        let timeout = Duration::from_secs(600 as u64);
+        info!("main|{} launch step(s) have been processed|sleeping for {:?}", n, timeout);
+        thread::sleep(timeout);
     }
 }
