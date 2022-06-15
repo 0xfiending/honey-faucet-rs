@@ -1,9 +1,8 @@
 use super::schema::*;
 use std::time::SystemTime;
-use serde::{Serialize, Deserialize};
-use diesel::prelude::*;
+use serde::Deserialize;
 
-#[derive(Queryable, Debug, PartialEq, Identifiable, AsChangeset)]
+#[derive(Queryable, Identifiable, AsChangeset, Debug, PartialEq)]
 #[table_name = "topic"]
 pub struct Topic {
     pub id: i32,
@@ -18,7 +17,7 @@ pub struct Topic {
     pub updated_dt: Option<SystemTime>,
 }
 
-#[derive(Queryable, Identifiable, AsChangeset)]
+#[derive(Queryable, Identifiable, AsChangeset, Debug, PartialEq)]
 #[table_name = "flow"]
 pub struct Flow {
     pub id: i32,  // flow_id
@@ -26,11 +25,12 @@ pub struct Flow {
     pub topic_id: i32,
     pub frequency: String,
     pub is_active: bool,
+    pub run_flg: bool,
     pub created_dt: SystemTime,
     pub updated_dt: Option<SystemTime>,
 }
 
-#[derive(Queryable, Identifiable, AsChangeset)]
+#[derive(Queryable, Identifiable, AsChangeset, Debug, PartialEq)]
 #[table_name = "flow_step"]
 pub struct FlowStep {
     pub id: i32,    // flow_step_id
@@ -45,7 +45,7 @@ pub struct FlowStep {
     pub updated_dt: Option<SystemTime>,
 }
 
-#[derive(Queryable, Identifiable, AsChangeset)]
+#[derive(Queryable, Identifiable, AsChangeset, Debug, PartialEq)]
 #[table_name = "job"]
 pub struct Job {
     pub id: i32,    // job_id
@@ -53,11 +53,11 @@ pub struct Job {
     pub flow_id: i32,
     pub status: String,
     pub created_dt: SystemTime,
-    pub start_dt: SystemTime,
+    pub start_dt: Option<SystemTime>,
     pub updated_dt: Option<SystemTime>,
 }
 
-#[derive(Queryable, Identifiable, AsChangeset)]
+#[derive(Queryable, Identifiable, AsChangeset, Debug, PartialEq)]
 #[table_name = "job_step"]
 pub struct JobStep {
     pub id: i32,    // job_step_id
@@ -118,7 +118,7 @@ pub struct JobForm<'a> {
     flow_id: i32,
     status: &'a str,
     created_dt: SystemTime,
-    start_dt: SystemTime,
+    start_dt: Option<SystemTime>,
     updated_dt: Option<SystemTime>,
 }
 

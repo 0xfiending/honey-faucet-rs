@@ -4,6 +4,7 @@ table! {
         flow_name -> Varchar,
         topic_id -> Nullable<Int4>,
         is_active -> Bool,
+        run_flg -> Bool,
         frequency -> Varchar,
         created_dt -> Timestamp,
         updated_dt -> Nullable<Timestamp>,
@@ -32,7 +33,7 @@ table! {
         flow_id -> Int4,
         status -> Varchar,
         created_dt -> Timestamp,
-        start_dt -> Timestamp,
+        start_dt -> Nullable<Timestamp>,
         updated_dt -> Nullable<Timestamp>,
     }
 }
